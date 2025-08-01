@@ -161,10 +161,7 @@ class EmbeddingsRater:
 
         if temperature != 1.0:
             llm_response_pdfs = np.array(
-                [
-                    compute.scale_pdf_no_max_temp(_pdf, temperature)
-                    for _pdf in llm_response_pdfs
-                ]
+                [compute.scale_pdf(_pdf, temperature) for _pdf in llm_response_pdfs]
             )
 
         return llm_response_pdfs

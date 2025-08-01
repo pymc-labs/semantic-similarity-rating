@@ -67,7 +67,7 @@ The ESR methodology works by:
 
 - `EmbeddingsRater`: Main class implementing the ESR methodology
 - `response_embeddings_to_pdf()`: Core function for similarity-to-probability conversion
-- `scale_pdf()` and `scale_pdf_no_max_temp()`: Temperature scaling functions
+- `scale_pdf()`: Temperature scaling function
 
 ## Citation
 
