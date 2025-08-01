@@ -1,0 +1,38 @@
+[project]
+authors = [{name = "pymc-labs", email = "info@pymc-labs.com"}]
+dependencies = []
+description = "Add a short description here"
+name = "package_name"
+requires-python = ">= 3.11"
+version = "0.1.0"
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64", "osx-64"]
+
+[tool.pixi.pypi-dependencies]
+package_name = { path = ".", editable = true }
+
+[tool.pixi.dependencies]
+pandas = "*"
+numpy = "*"
+ruff = "*"
+python-dotenv = "*"
+pre-commit = "*"
+beartype = "*"
+pymc = "*"
+
+[tool.pixi.environments]
+default = { features = ["test"], solve-group = "default" }
+test = { features = ["test"], solve-group = "default" }
+minimal = { features = [], solve-group = "default" }
+
+[tool.pixi.feature.test.tasks]
+test = "pytest"
