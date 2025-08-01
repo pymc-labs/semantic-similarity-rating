@@ -25,34 +25,51 @@ pip install git+https://github.com/pymc-labs/embeddings-similarity-rating.git
 ## Quick Start
 
 ```python
-import numpy as np
 import polars as po
-from embeddings_similarity_rating import EmbeddingsRater
+import numpy as np
+from embeddings_similarity_rating import ResponseRater
 
-# Create reference sentences with embeddings
-reference_data = po.DataFrame({
-    'id': ['set1'] * 5,
-    'int_response': [1, 2, 3, 4, 5],
-    'sentence': [
-        "It's very unlikely that I'd buy it.",
-        "It's unlikely that I'd buy it.",
-        "I might buy it or not. I don't know.",
-        "It's somewhat possible I'd buy it.",
-        "It's possible I'd buy it."
-    ],
-    'embedding_small': [np.random.rand(384).tolist() for _ in range(5)]
-})
+# Create example reference sentences dataframe
+reference_set_1 = [
+    "Strongly disagree",
+    "Disagree",
+    "Neutral",
+    "Agree",
+    "Strongly agree",
+]
+reference_set_2 = [
+    "Disagree a lot",
+    "Kinda disagree",
+    "Don't know",
+    "Kinda agree",
+    "Agree a lot",
+]
+df = po.DataFrame(
+    {
+        "id": ["set1"] * 5 + ["set2"] * 5,
+        "int_response": [1, 2, 3, 4, 5] * 2,
+        "sentence": reference_set_1 + reference_set_2,
+    }
+)
 
-# Initialize the rater
-rater = EmbeddingsRater(reference_data, embeddings_column='embedding_small')
+# Initialize rater
+rater = ResponseRater(df)
 
-# Convert LLM response embeddings to probability distributions
-llm_responses = np.random.rand(10, 384)
-pmfs = rater.get_response_pmfs('set1', llm_responses)
+# Create some example synthetic consumer responses
+llm_responses = ["I totally agree", "Not sure about this", "Completely disagree"]
 
-# Get overall survey distribution
+# Get PMFs for synthetic consumer responses
+pmfs = rater.get_response_pmfs(
+    reference_set_id="set1",      # Reference set to score against, or "mean"
+    llm_responses=llm_responses,  # List of LLM responses to score
+    temperature=1.0,              # Temperature for scaling the PMF
+    epsilon=0.0,                  # Small regularization parameter to prevent division by zero and add smoothing
+)
+
+# Get survey response PMF
 survey_pmf = rater.get_survey_response_pmf(pmfs)
-print(f"Survey distribution: {survey_pmf}")
+
+print(survey_pmf)
 ```
 
 ## Methodology
@@ -65,9 +82,8 @@ The ESR methodology works by:
 
 ## Core Components
 
-- `EmbeddingsRater`: Main class implementing the ESR methodology
-- `response_embeddings_to_pmf()`: Core function for similarity-to-probability conversion
-- `scale_pmf()`: Temperature scaling function
+- `ResponseRater`: Main class implementing the ESR methodology
+- `get_response_pmfs()`: Convert LLM response embeddings to PMFs using specified reference set
 
 ## Citation
 

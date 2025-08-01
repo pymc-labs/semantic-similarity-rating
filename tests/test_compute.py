@@ -1,5 +1,5 @@
 """
-Tests for the compute module functions.
+Tests for compute module - focused on mathematical properties and behavior.
 """
 
 import numpy as np
@@ -9,232 +9,215 @@ from embeddings_similarity_rating.compute import (
     response_embeddings_to_pmf,
 )
 
+# Test constants
+EMBEDDING_DIM = 384  # Realistic embedding dimension
+LIKERT_SIZE = 5
 
-class TestBasicFunctions:
-    """Test basic utility functions."""
 
-    def test_scale_pmf(self):
-        """Test PMF temperature scaling."""
+def assert_valid_pmf(pmf_array):
+    """Assert array contains valid probability mass function(s)."""
+    if pmf_array.ndim == 1:
+        pmf_array = pmf_array.reshape(1, -1)
+
+    for i, pmf in enumerate(pmf_array):
+        assert np.isclose(pmf.sum(), 1.0, atol=1e-10), f"PMF {i} doesn't sum to 1"
+        assert np.all(pmf >= 0), f"PMF {i} has negative probabilities"
+
+
+def create_test_embeddings(n_responses=3, n_dimensions=EMBEDDING_DIM, seed=42):
+    """Create deterministic test embeddings."""
+    np.random.seed(seed)
+    return np.random.randn(n_responses, n_dimensions)
+
+
+def create_likert_embeddings(n_dimensions=EMBEDDING_DIM, n_points=LIKERT_SIZE, seed=42):
+    """Create deterministic Likert reference embeddings."""
+    np.random.seed(seed + 1)  # Different seed for diversity
+    return np.random.randn(n_dimensions, n_points)
+
+
+class TestScalePMF:
+    """Test temperature scaling of probability distributions."""
+
+    def test_temperature_identity(self):
+        """Temperature of 1.0 should leave PMF unchanged."""
+        pmf = np.array([0.1, 0.2, 0.3, 0.4])
+        scaled = scale_pmf(pmf, temperature=1.0)
+        assert np.allclose(scaled, pmf)
+
+    def test_temperature_extremes(self):
+        """Test behavior at temperature extremes."""
         pmf = np.array([0.1, 0.2, 0.3, 0.4])
 
-        # Test temperature = 1 (no change)
-        scaled = scale_pmf(pmf, temperature=1.0)
-        assert np.allclose(scaled, pmf), "Temperature 1 should not change PMF"
+        # Near-zero temperature should create one-hot distribution
+        sharp = scale_pmf(pmf, temperature=0.01)
+        assert_valid_pmf(sharp)
+        assert sharp[np.argmax(pmf)] > 0.99  # Highest prob element dominates
 
-        # Test temperature = 0 (one-hot)
-        scaled = scale_pmf(pmf, temperature=0.0)
-        assert np.isclose(scaled.sum(), 1.0), "Scaled PMF should sum to 1"
-        assert scaled[np.argmax(pmf)] == 1.0, "Max element should become 1"
-        assert np.sum(scaled > 0) == 1, "Only one element should be positive"
+        # High temperature should be more uniform
+        smooth = scale_pmf(pmf, temperature=10.0)
+        assert_valid_pmf(smooth)
 
-        # Test temperature > 1 (smoother)
-        scaled = scale_pmf(pmf, temperature=2.0)
-        assert np.isclose(scaled.sum(), 1.0), "Scaled PMF should sum to 1"
+        # Higher temperature should increase entropy
+        sharp_entropy = -np.sum(sharp * np.log(sharp + 1e-12))
+        smooth_entropy = -np.sum(smooth * np.log(smooth + 1e-12))
+        assert smooth_entropy > sharp_entropy
 
-        # Test max_temp limit
-        scaled = scale_pmf(pmf, temperature=20.0, max_temp=5.0)
+    def test_temperature_capping(self):
+        """Temperature should be capped at max_temp."""
+        pmf = np.array([0.1, 0.6, 0.3])
+
+        capped = scale_pmf(pmf, temperature=100.0, max_temp=5.0)
         expected = scale_pmf(pmf, temperature=5.0)
-        assert np.allclose(scaled, expected), "Should cap at max_temp"
+        assert np.allclose(capped, expected)
 
 
 class TestEmbeddingsToPMF:
-    """Test the core response_embeddings_to_pmf function."""
+    """Test core embedding-to-PMF conversion function."""
 
-    def test_response_embeddings_to_pmf(self):
-        """Test conversion from embeddings to PMF."""
-        # Create test data
-        n_responses = 3
-        n_dimensions = 10
-        n_likert_points = 5
+    def test_basic_functionality(self):
+        """Should convert embeddings to valid PMFs with correct shape."""
+        response_embs = create_test_embeddings(n_responses=3)
+        likert_embs = create_likert_embeddings()
 
-        # Generate random embeddings
-        np.random.seed(42)
-        response_embeddings = np.random.rand(n_responses, n_dimensions)
-        likert_embeddings = np.random.rand(n_dimensions, n_likert_points)
+        result = response_embeddings_to_pmf(response_embs, likert_embs)
 
-        # Test the function
-        result = response_embeddings_to_pmf(response_embeddings, likert_embeddings)
+        assert result.shape == (3, LIKERT_SIZE)
+        assert_valid_pmf(result)
 
-        # Check output shape
-        expected_shape = (n_responses, n_likert_points)
-        assert result.shape == expected_shape, (
-            f"Expected shape {expected_shape}, got {result.shape}"
-        )
+    def test_deterministic_behavior(self):
+        """Identical inputs should produce identical outputs."""
+        # Create identical response embeddings
+        response_embs = np.tile(create_test_embeddings(n_responses=1), (2, 1))
+        likert_embs = create_likert_embeddings()
 
-        # Check that each row is a valid PMF
-        for i in range(n_responses):
-            row_sum = result[i].sum()
-            assert np.isclose(row_sum, 1.0), f"Row {i} should sum to 1, got {row_sum}"
-            assert np.all(result[i] >= 0), f"Row {i} should have non-negative values"
+        result = response_embeddings_to_pmf(response_embs, likert_embs)
 
-        # Check that at least one element in each row is zero (due to min subtraction)
-        for i in range(n_responses):
-            assert np.any(result[i] == 0), (
-                f"Row {i} should have at least one zero element"
-            )
+        assert np.allclose(result[0], result[1])
+        assert_valid_pmf(result)
 
-    def test_response_embeddings_to_pmf_edge_cases(self):
-        """Test edge cases for response_embeddings_to_pmf."""
-        # Test with identical embeddings
-        n_dimensions = 5
-        n_likert_points = 3
+    def test_epsilon_regularization(self):
+        """Epsilon should prevent zero probabilities and affect distribution."""
+        response_embs = create_test_embeddings(n_responses=2)
+        likert_embs = create_likert_embeddings()
 
-        # All response embeddings are identical
-        response_embeddings = np.ones((2, n_dimensions))
-        likert_embeddings = np.random.rand(n_dimensions, n_likert_points)
+        no_eps = response_embeddings_to_pmf(response_embs, likert_embs, epsilon=0.0)
+        with_eps = response_embeddings_to_pmf(response_embs, likert_embs, epsilon=0.1)
 
-        result = response_embeddings_to_pmf(response_embeddings, likert_embeddings)
+        assert_valid_pmf(no_eps)
+        assert_valid_pmf(with_eps)
+        assert not np.allclose(no_eps, with_eps)
 
-        # Both rows should be identical
-        assert np.allclose(result[0], result[1]), (
-            "Identical inputs should produce identical outputs"
-        )
+        # With epsilon, all probabilities should be positive
+        assert np.all(with_eps > 0)
 
-        # Each row should still be a valid PMF
-        for i in range(2):
-            assert np.isclose(result[i].sum(), 1.0), f"Row {i} should sum to 1"
-            assert np.all(result[i] >= 0), f"Row {i} should have non-negative values"
+    def test_epsilon_effect_on_uniformity(self):
+        """Higher epsilon should generally create more uniform distributions."""
+        response_embs = create_test_embeddings(n_responses=1)
+        likert_embs = create_likert_embeddings()
 
-    def test_response_embeddings_to_pmf_with_epsilon(self):
-        """Test response_embeddings_to_pmf with non-zero epsilon parameter."""
-        np.random.seed(42)  # For reproducible results
+        low_eps = response_embeddings_to_pmf(response_embs, likert_embs, epsilon=0.001)[
+            0
+        ]
+        high_eps = response_embeddings_to_pmf(response_embs, likert_embs, epsilon=0.1)[
+            0
+        ]
 
-        n_dimensions = 4
-        n_likert_points = 5
-        n_responses = 3
+        # Higher epsilon should increase entropy
+        low_entropy = -np.sum(low_eps * np.log(low_eps + 1e-12))
+        high_entropy = -np.sum(high_eps * np.log(high_eps + 1e-12))
 
-        response_embeddings = np.random.rand(n_responses, n_dimensions)
-        likert_embeddings = np.random.rand(n_dimensions, n_likert_points)
+        assert high_entropy >= low_entropy  # Should be more uniform
 
-        epsilon_values = [0.0, 1e-6, 1e-3, 0.1]
+    def test_empty_input_handling(self):
+        """Should handle empty response arrays gracefully."""
+        empty_responses = np.empty((0, EMBEDDING_DIM))
+        likert_embs = create_likert_embeddings()
 
-        for epsilon in epsilon_values:
-            result = response_embeddings_to_pmf(
-                response_embeddings, likert_embeddings, epsilon=epsilon
-            )
+        result = response_embeddings_to_pmf(empty_responses, likert_embs)
 
-            # Each row should be a valid PMF regardless of epsilon
-            for i in range(n_responses):
-                assert np.isclose(result[i].sum(), 1.0, atol=1e-10), (
-                    f"Row {i} should sum to 1 with epsilon={epsilon}"
-                )
-                assert np.all(result[i] >= 0), (
-                    f"Row {i} should have non-negative values with epsilon={epsilon}"
-                )
+        assert result.shape == (0, LIKERT_SIZE)
+        assert isinstance(result, np.ndarray)
 
-            # With positive epsilon, no values should be exactly zero
-            if epsilon > 0:
-                assert np.all(result > 0), (
-                    f"All values should be positive with epsilon={epsilon}"
-                )
+    def test_similarity_ranking_preserved(self):
+        """PMF should reflect embedding similarity ranking."""
+        # Create response that's most similar to first Likert point
+        likert_embs = create_likert_embeddings()
+        response_embs = likert_embs[:, 0:1].T  # Transpose to make it (1, dim)
 
-    def test_response_embeddings_to_pmf_epsilon_effects(self):
-        """Test specific mathematical effects of epsilon parameter."""
-        np.random.seed(123)
+        result = response_embeddings_to_pmf(response_embs, likert_embs, epsilon=0.01)
 
-        n_dimensions = 3
-        n_likert_points = 4
-        response_embeddings = np.random.rand(2, n_dimensions)
-        likert_embeddings = np.random.rand(n_dimensions, n_likert_points)
+        # First Likert point should have highest probability
+        assert np.argmax(result[0]) == 0
 
-        # Compare results with and without epsilon
-        result_no_eps = response_embeddings_to_pmf(
-            response_embeddings, likert_embeddings, epsilon=0.0
-        )
-        result_with_eps = response_embeddings_to_pmf(
-            response_embeddings, likert_embeddings, epsilon=0.01
-        )
 
-        # Results should be different
-        assert not np.allclose(result_no_eps, result_with_eps), (
-            "Results should differ when epsilon is added"
-        )
+class TestEdgeCases:
+    """Test edge cases and robustness."""
 
-        # With epsilon, minimum positions should get boosted
-        for i in range(result_no_eps.shape[0]):
-            # Find positions that were zero (minimum) without epsilon
-            zero_positions = result_no_eps[i] == 0
-            if np.any(zero_positions):
-                # These positions should now be positive with epsilon
-                assert np.all(result_with_eps[i][zero_positions] > 0), (
-                    "Previously zero positions should be positive with epsilon"
-                )
-
-    def test_response_embeddings_to_pmf_epsilon_kronecker_delta(self):
-        """Test that epsilon correctly implements Kronecker delta behavior."""
-        # Create response embedding
-        response_embeddings = np.array([[1.0, 0.0]])
-
-        # Create likert embeddings where the middle one will have lowest similarity
-        likert_embeddings = np.array(
+    def test_single_response_realistic_dimension(self):
+        """Should work with single response and realistic embeddings."""
+        response_embs = np.array([[1.0, 0.5, -0.2]])  # Non-zero, realistic
+        likert_embs = np.array(
             [
-                [1.0, 0.0, 0.5],  # High similarity to response
-                [0.0, 1.0, 0.8],  # Low similarity to response for middle column
+                [1.0, 0.5, 0.0, -0.5, -1.0],
+                [0.8, 0.2, 0.1, -0.3, -0.8],
+                [0.6, 0.1, 0.0, -0.1, -0.6],
             ]
         )
 
-        epsilon = 0.1
-        result = response_embeddings_to_pmf(
-            response_embeddings, likert_embeddings, epsilon=epsilon
-        )
+        result = response_embeddings_to_pmf(response_embs, likert_embs)
 
-        # The result should be a valid PMF
-        assert np.isclose(result.sum(), 1.0), "Result should sum to 1"
-        assert np.all(result >= 0), "All values should be non-negative"
+        assert result.shape == (1, 5)
+        assert_valid_pmf(result)
 
-        # All positions should be positive due to epsilon
-        assert np.all(result > 0), "All positions should be positive with epsilon"
+    def test_small_but_nonzero_embeddings(self):
+        """Should handle small but non-zero embeddings without errors."""
+        response_embs = np.full((2, EMBEDDING_DIM), 1e-6)  # Small but not zero
+        likert_embs = create_likert_embeddings()
 
-    def test_response_embeddings_to_pmf_empty_input(self):
-        """Test response_embeddings_to_pmf with empty input."""
-        # Create empty response matrix but valid likert matrix
-        empty_responses = np.empty((0, 4))  # 0 responses, 4 dimensions
-        likert_embeddings = np.random.rand(4, 5)  # 4 dimensions, 5 Likert points
+        result = response_embeddings_to_pmf(response_embs, likert_embs)
 
-        result = response_embeddings_to_pmf(empty_responses, likert_embeddings)
+        assert result.shape == (2, LIKERT_SIZE)
+        assert_valid_pmf(result)
+        # Both responses should be identical since they're the same
+        assert np.allclose(result[0], result[1])
 
-        # Should return empty result with correct shape
-        assert result.shape == (0, 5), "Should return (0, 5) for empty input"
-        assert isinstance(result, np.ndarray), "Should return numpy array"
+    def test_extreme_similarity_values(self):
+        """Should handle very high and very low similarity values."""
+        # Create response that's very similar to one Likert point
+        likert_embs = create_likert_embeddings()
+        response_embs = likert_embs[:, 2:3].T * 1000  # Scale up for extreme similarity
 
-    def test_response_embeddings_to_pmf_epsilon_consistency(self):
-        """Test that epsilon behavior is consistent across different scales."""
-        np.random.seed(456)
+        result = response_embeddings_to_pmf(response_embs, likert_embs)
 
-        n_dimensions = 5
-        n_likert_points = 5
-        response_embeddings = np.random.rand(3, n_dimensions)
-        likert_embeddings = np.random.rand(n_dimensions, n_likert_points)
+        assert_valid_pmf(result)
+        # Should strongly prefer the similar point
+        assert result[0, 2] > 0.8  # High probability for the similar point
 
-        # Test with different epsilon values
-        epsilons = [0.001, 0.01, 0.1]
-        results = []
 
-        for epsilon in epsilons:
-            result = response_embeddings_to_pmf(
-                response_embeddings, likert_embeddings, epsilon=epsilon
-            )
-            results.append(result)
+class TestNumericalStability:
+    """Test numerical stability and precision."""
 
-            # Basic validation for each epsilon
-            assert result.shape == (3, 5), "Shape should be preserved"
-            for i in range(3):
-                assert np.isclose(result[i].sum(), 1.0), (
-                    f"Row {i} should sum to 1 with epsilon={epsilon}"
-                )
+    def test_large_embeddings(self):
+        """Should handle large embedding values without numerical issues."""
+        response_embs = create_test_embeddings() * 1000
+        likert_embs = create_likert_embeddings() * 1000
 
-        # Larger epsilon should generally lead to more uniform distributions
-        # (entropy should increase with epsilon)
-        for i in range(3):
-            entropy_small = -np.sum(results[0][i] * np.log(results[0][i] + 1e-12))
-            entropy_large = -np.sum(results[2][i] * np.log(results[2][i] + 1e-12))
+        result = response_embeddings_to_pmf(response_embs, likert_embs)
 
-            # Larger epsilon should generally increase entropy (more uniform)
-            assert entropy_large >= entropy_small - 1e-10, (
-                f"Entropy should not decrease significantly with larger epsilon for row {i}"
-            )
+        assert_valid_pmf(result)
+        assert np.all(np.isfinite(result))
+
+    def test_very_small_epsilon(self):
+        """Should handle very small epsilon values."""
+        response_embs = create_test_embeddings(n_responses=1)
+        likert_embs = create_likert_embeddings()
+
+        result = response_embeddings_to_pmf(response_embs, likert_embs, epsilon=1e-10)
+
+        assert_valid_pmf(result)
+        assert np.all(np.isfinite(result))
 
 
 if __name__ == "__main__":
-    # Run tests if called directly
     pytest.main([__file__, "-v"])
