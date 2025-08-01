@@ -1,37 +1,80 @@
-# embeddings_similarity_rating
+# Embeddings-Similarity Rating (ESR)
 
-*Description of the project/package. Make it super easy for people to understand what it does. Add links to external resources like Notion, SOWs, etc.if needed.*
+A Python package implementing the Embeddings-Similarity Rating methodology for converting LLM textual responses to Likert scale probability distributions using semantic similarity against reference statements.
 
-## Features
+## Overview
 
-*Bullet form list of the most important features of the project/package.*
+The ESR methodology addresses the challenge of mapping rich textual responses from Large Language Models (LLMs) to structured Likert scale ratings. Instead of forcing a single numerical rating, ESR preserves the inherent uncertainty and nuance in textual responses by generating probability distributions over all possible Likert scale points.
 
-## Usage
+This package provides a distilled, reusable implementation of the ESR methodology described in the paper "Measuring Synthetic Consumer Purchase Intent Using Embeddings-Similarity Ratings" by Maier & Aslak (2025).
 
-*How to use `embeddings_similarity_rating`. Include examples and code snippets.*
+## Installation
 
-## Project Structure
+### Local Development
+To install this package locally for development, run:
+```bash
+pip install -e .
+```
 
-- `embeddings_similarity_rating/`: Contains the package logic
-- `tests/`: Contains tests for the package
-- `notebooks/`: Contains exploratory code for testing new features
+### From GitHub Repository
+To install this package into your own project from GitHub, run:
+```bash
+pip install git+https://github.com/pymc-labs/embeddings-similarity-rating.git
+```
 
-## Development
+## Quick Start
 
-This package has been created with [pymc-labs/project-starter](https://github.com/pymc-labs/project-starter). It features:
+```python
+import numpy as np
+import polars as po
+from embeddings_similarity_rating import EmbeddingsRater
 
-- 📦 **`pixi`** for dependency and environment management.
-- 🧹 **`pre-commit`** for formatting, spellcheck, etc. If everyone uses the same standard formatting, then PRs won't have flaky formatting updates that distract from the actual contribution. Reviewing code will be much easier.
-- 🏷️ **`beartype`** for runtime type checking. If you know what's going in and out of functions just by reading the code, then it's easier to debug. And if these types are even enforced at runtime with tools like `beartype`, then there's a whole class of bugs that can never enter your code.
-- 🧪 **`pytest`** for testing. Meanwhile, with `beartype` handling type checks, tests do not have to assert types, and can merely focus on whether the actual logic works.
-- 🔄 **Github Actions** for running the pre-commit checks on each PR, automated testing and dependency management (dependabot).
+# Create reference sentences with embeddings
+reference_data = po.DataFrame({
+    'id': ['set1'] * 5,
+    'int_response': [1, 2, 3, 4, 5],
+    'sentence': [
+        "It's very unlikely that I'd buy it.",
+        "It's unlikely that I'd buy it.",
+        "I might buy it or not. I don't know.",
+        "It's somewhat possible I'd buy it.",
+        "It's possible I'd buy it."
+    ],
+    'embedding_small': [np.random.rand(384).tolist() for _ in range(5)]
+})
 
-### Prerequisites
+# Initialize the rater
+rater = EmbeddingsRater(reference_data, embeddings_column='embedding_small')
 
-- Python 3.11 or higher
-- [Pixi package manager](https://pixi.sh/latest/)
+# Convert LLM response embeddings to probability distributions
+llm_responses = np.random.rand(10, 384)
+pdfs = rater.get_response_pdfs('set1', llm_responses)
 
-### Get started
+# Get overall survey distribution
+survey_pdf = rater.get_survey_response_pdf(pdfs)
+print(f"Survey distribution: {survey_pdf}")
+```
 
-1. Run `pixi install` to install the dependencies.
-2. Run `pixi r test` to run the tests.
+## Methodology
+
+The ESR methodology works by:
+1. Defining reference statements for each Likert scale point
+2. Computing cosine similarities between LLM response embeddings and reference statement embeddings
+3. Converting similarities to probability distributions using minimum similarity subtraction and normalization
+4. Optionally applying temperature scaling for distribution control
+
+## Core Components
+
+- `EmbeddingsRater`: Main class implementing the ESR methodology
+- `response_embeddings_to_pdf()`: Core function for similarity-to-probability conversion
+- `scale_pdf()` and `scale_pdf_no_max_temp()`: Temperature scaling functions
+
+## Citation
+
+```
+Maier, B. F., & Aslak, U. (2025). Measuring Synthetic Consumer Purchase Intent Using Embeddings-Similarity Ratings.
+```
+
+## License
+
+MIT License
