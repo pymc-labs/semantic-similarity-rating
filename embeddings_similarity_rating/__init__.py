@@ -10,16 +10,18 @@ This package implements the ESR methodology described in the paper:
 
 from beartype.claw import beartype_this_package
 
-from .compute import response_embeddings_to_pdf, scale_pdf
+from .compute import response_embeddings_to_pmf, scale_pmf
 from .embeddings_rater import EmbeddingsRater
+from .response_rater import ResponseRater
 
 __version__ = "1.0.0"
 __author__ = "Ben F. Maier, Ulf Aslak"
 
 __all__ = [
     "EmbeddingsRater",
-    "response_embeddings_to_pdf",
-    "scale_pdf",
+    "ResponseRater",
+    "response_embeddings_to_pmf",
+    "scale_pmf",
 ]
 
 beartype_this_package()

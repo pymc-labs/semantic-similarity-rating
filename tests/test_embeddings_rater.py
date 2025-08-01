@@ -86,8 +86,8 @@ class TestEmbeddingsRaterInitialization:
             EmbeddingsRater(df_incomplete, embeddings_column="embedding_small")
 
 
-class TestEmbeddingsRaterResponsePDFs:
-    """Test the get_response_pdfs method."""
+class TestEmbeddingsRaterResponsePMFs:
+    """Test the get_response_pmfs method."""
 
     def setup_method(self):
         """Set up test data."""
@@ -103,69 +103,156 @@ class TestEmbeddingsRaterResponsePDFs:
         self.rater = EmbeddingsRater(self.df, embeddings_column="embedding_small")
         self.test_responses = np.random.rand(3, 10)
 
-    def test_get_response_pdfs_specific_set(self):
-        """Test getting PDFs for a specific reference set."""
-        pdfs = self.rater.get_response_pdfs("set1", self.test_responses)
+    def test_get_response_pmfs_specific_set(self):
+        """Test getting PMFs for a specific reference set."""
+        pmfs = self.rater.get_response_pmfs("set1", self.test_responses)
 
         # Check output shape
-        assert pdfs.shape == (3, 5), "Should return 3 responses x 5 Likert points"
+        assert pmfs.shape == (3, 5), "Should return 3 responses x 5 Likert points"
 
-        # Check that each row is a valid PDF
+        # Check that each row is a valid PMF
         for i in range(3):
-            assert np.isclose(pdfs[i].sum(), 1.0), f"Row {i} should sum to 1"
-            assert np.all(pdfs[i] >= 0), f"Row {i} should have non-negative values"
+            assert np.isclose(pmfs[i].sum(), 1.0), f"Row {i} should sum to 1"
+            assert np.all(pmfs[i] >= 0), f"Row {i} should have non-negative values"
 
-    def test_get_response_pdfs_mean_set(self):
-        """Test getting PDFs using mean across all reference sets."""
-        pdfs = self.rater.get_response_pdfs("mean", self.test_responses)
+    def test_get_response_pmfs_mean_set(self):
+        """Test getting PMFs using mean across all reference sets."""
+        pmfs = self.rater.get_response_pmfs("mean", self.test_responses)
 
         # Check output shape
-        assert pdfs.shape == (3, 5), "Should return 3 responses x 5 Likert points"
+        assert pmfs.shape == (3, 5), "Should return 3 responses x 5 Likert points"
 
-        # Check that each row is a valid PDF
+        # Check that each row is a valid PMF
         for i in range(3):
-            assert np.isclose(pdfs[i].sum(), 1.0), f"Row {i} should sum to 1"
-            assert np.all(pdfs[i] >= 0), f"Row {i} should have non-negative values"
+            assert np.isclose(pmfs[i].sum(), 1.0), f"Row {i} should sum to 1"
+            assert np.all(pmfs[i] >= 0), f"Row {i} should have non-negative values"
 
-    def test_get_response_pdfs_with_temperature(self):
-        """Test getting PDFs with temperature scaling."""
+    def test_get_response_pmfs_with_temperature(self):
+        """Test getting PMFs with temperature scaling."""
         # Test with temperature < 1 (sharper)
-        pdfs_sharp = self.rater.get_response_pdfs(
+        pmfs_sharp = self.rater.get_response_pmfs(
             "set1", self.test_responses, temperature=0.5
         )
 
         # Test with temperature > 1 (smoother)
-        pdfs_smooth = self.rater.get_response_pdfs(
+        pmfs_smooth = self.rater.get_response_pmfs(
             "set1", self.test_responses, temperature=2.0
         )
 
         # Test with temperature = 1 (baseline)
-        pdfs_normal = self.rater.get_response_pdfs(
+        pmfs_normal = self.rater.get_response_pmfs(
             "set1", self.test_responses, temperature=1.0
         )
 
-        # All should be valid PDFs
-        for pdfs in [pdfs_sharp, pdfs_smooth, pdfs_normal]:
-            assert pdfs.shape == (3, 5), "Should have correct shape"
+        # All should be valid PMFs
+        for pmfs in [pmfs_sharp, pmfs_smooth, pmfs_normal]:
+            assert pmfs.shape == (3, 5), "Should have correct shape"
             for i in range(3):
-                assert np.isclose(pdfs[i].sum(), 1.0), f"Row {i} should sum to 1"
-                assert np.all(pdfs[i] >= 0), f"Row {i} should have non-negative values"
+                assert np.isclose(pmfs[i].sum(), 1.0), f"Row {i} should sum to 1"
+                assert np.all(pmfs[i] >= 0), f"Row {i} should have non-negative values"
 
         # Sharp distribution should be more peaked than normal
         # (higher maximum values)
         for i in range(3):
-            assert pdfs_sharp[i].max() >= pdfs_normal[i].max(), (
+            assert pmfs_sharp[i].max() >= pmfs_normal[i].max(), (
                 "Sharp should be more peaked"
             )
 
-    def test_get_response_pdfs_invalid_set(self):
+    def test_get_response_pmfs_invalid_set(self):
         """Test that invalid reference set raises error."""
         with pytest.raises(KeyError):
-            self.rater.get_response_pdfs("nonexistent_set", self.test_responses)
+            self.rater.get_response_pmfs("nonexistent_set", self.test_responses)
+
+    def test_get_response_pmfs_with_epsilon(self):
+        """Test that epsilon parameter is properly passed through in get_response_pmfs."""
+        # Test with different epsilon values
+        result_no_eps = self.rater.get_response_pmfs(
+            "set1", self.test_responses, epsilon=0.0
+        )
+        result_with_eps = self.rater.get_response_pmfs(
+            "set1", self.test_responses, epsilon=0.01
+        )
+
+        # Both should be valid PMFs
+        for result in [result_no_eps, result_with_eps]:
+            assert result.shape == (3, 5), "Should have correct shape"
+            for i in range(3):
+                assert np.isclose(result[i].sum(), 1.0), f"Row {i} should sum to 1"
+                assert np.all(result[i] >= 0), (
+                    f"Row {i} should have non-negative values"
+                )
+
+        # Results should be different due to epsilon
+        assert not np.allclose(result_no_eps, result_with_eps), (
+            "Results should differ when epsilon is used"
+        )
+
+        # With epsilon, no values should be exactly zero
+        assert np.all(result_with_eps > 0), "All values should be positive with epsilon"
+
+    def test_get_response_pmfs_with_epsilon_mean_reference(self):
+        """Test epsilon parameter with mean reference set."""
+        # Test with mean reference and epsilon
+        result_no_eps = self.rater.get_response_pmfs(
+            "mean", self.test_responses, epsilon=0.0
+        )
+        result_with_eps = self.rater.get_response_pmfs(
+            "mean", self.test_responses, epsilon=0.005
+        )
+
+        # Both should be valid PMFs
+        for result in [result_no_eps, result_with_eps]:
+            assert result.shape == (3, 5), "Should have correct shape"
+            for i in range(3):
+                assert np.isclose(result[i].sum(), 1.0, atol=1e-10), (
+                    f"Row {i} should sum to 1"
+                )
+                assert np.all(result[i] >= 0), (
+                    f"Row {i} should have non-negative values"
+                )
+
+        # Results should be different due to epsilon
+        assert not np.allclose(result_no_eps, result_with_eps), (
+            "Results should differ when epsilon is used with mean reference"
+        )
+
+    def test_epsilon_and_temperature_interaction(self):
+        """Test that epsilon and temperature parameters work together correctly."""
+        # Test different combinations
+        combinations = [
+            (1.0, 0.0),  # No temperature scaling, no epsilon
+            (1.0, 0.01),  # No temperature scaling, with epsilon
+            (2.0, 0.0),  # Temperature scaling, no epsilon
+            (2.0, 0.01),  # Both temperature scaling and epsilon
+        ]
+
+        results = []
+        for temperature, epsilon in combinations:
+            result = self.rater.get_response_pmfs(
+                "set1", self.test_responses, temperature=temperature, epsilon=epsilon
+            )
+            results.append(result)
+
+            # Each result should be a valid PMF
+            assert result.shape == (3, 5), "Should have correct shape"
+            for i in range(3):
+                assert np.isclose(result[i].sum(), 1.0, atol=1e-10), (
+                    f"Row {i} should sum to 1 with T={temperature}, ε={epsilon}"
+                )
+                assert np.all(result[i] >= 0), (
+                    f"Row {i} should have non-negative values with T={temperature}, ε={epsilon}"
+                )
+
+        # All results should be different from each other
+        for i in range(len(results)):
+            for j in range(i + 1, len(results)):
+                assert not np.allclose(results[i], results[j]), (
+                    f"Results {i} and {j} should be different"
+                )
 
 
-class TestEmbeddingsRaterSurveyPDFs:
-    """Test survey-level PDF methods."""
+class TestEmbeddingsRaterSurveyPMFs:
+    """Test survey-level PMF methods."""
 
     def setup_method(self):
         """Set up test data."""
@@ -181,67 +268,128 @@ class TestEmbeddingsRaterSurveyPDFs:
         self.rater = EmbeddingsRater(self.df, embeddings_column="embedding_small")
         self.test_responses = np.random.rand(5, 10)
 
-    def test_get_survey_response_pdf(self):
-        """Test aggregating individual PDFs to survey-level PDF."""
-        # Get individual PDFs
-        individual_pdfs = self.rater.get_response_pdfs("set1", self.test_responses)
+    def test_get_survey_response_pmf(self):
+        """Test aggregating individual PMFs to survey-level PMF."""
+        # Get individual PMFs
+        individual_pmfs = self.rater.get_response_pmfs("set1", self.test_responses)
 
-        # Get survey PDF
-        survey_pdf = self.rater.get_survey_response_pdf(individual_pdfs)
+        # Get survey PMF
+        survey_pmf = self.rater.get_survey_response_pmf(individual_pmfs)
 
-        # Check that result is valid PDF
-        assert survey_pdf.shape == (5,), "Survey PDF should have 5 elements"
-        assert np.isclose(survey_pdf.sum(), 1.0), "Survey PDF should sum to 1"
-        assert np.all(survey_pdf >= 0), "Survey PDF should have non-negative values"
+        # Check that result is valid PMF
+        assert survey_pmf.shape == (5,), "Survey PMF should have 5 elements"
+        assert np.isclose(survey_pmf.sum(), 1.0), "Survey PMF should sum to 1"
+        assert np.all(survey_pmf >= 0), "Survey PMF should have non-negative values"
 
-        # Check that survey PDF is the mean of individual PDFs
-        expected = individual_pdfs.mean(axis=0)
-        assert np.allclose(survey_pdf, expected), "Should be mean of individual PDFs"
+        # Check that survey PMF is the mean of individual PMFs
+        expected = individual_pmfs.mean(axis=0)
+        assert np.allclose(survey_pmf, expected), "Should be mean of individual PMFs"
 
-    def test_get_survey_response_pdf_by_reference_set_id(self):
-        """Test convenience method for getting survey PDF."""
+    def test_get_survey_response_pmf_by_reference_set_id(self):
+        """Test convenience method for getting survey PMF."""
         # Test convenience method
-        survey_pdf_conv = self.rater.get_survey_response_pdf_by_reference_set_id(
+        survey_pmf_conv = self.rater.get_survey_response_pmf_by_reference_set_id(
             "set1", self.test_responses
         )
 
         # Test manual approach
-        individual_pdfs = self.rater.get_response_pdfs("set1", self.test_responses)
-        survey_pdf_manual = self.rater.get_survey_response_pdf(individual_pdfs)
+        individual_pmfs = self.rater.get_response_pmfs("set1", self.test_responses)
+        survey_pmf_manual = self.rater.get_survey_response_pmf(individual_pmfs)
 
         # Should be identical
-        assert np.allclose(survey_pdf_conv, survey_pdf_manual), (
+        assert np.allclose(survey_pmf_conv, survey_pmf_manual), (
             "Convenience method should match manual approach"
         )
 
-        # Check that result is valid PDF
-        assert np.isclose(survey_pdf_conv.sum(), 1.0), "Survey PDF should sum to 1"
-        assert np.all(survey_pdf_conv >= 0), (
-            "Survey PDF should have non-negative values"
+        # Check that result is valid PMF
+        assert np.isclose(survey_pmf_conv.sum(), 1.0), "Survey PMF should sum to 1"
+        assert np.all(survey_pmf_conv >= 0), (
+            "Survey PMF should have non-negative values"
         )
 
-    def test_get_survey_response_pdf_with_temperature(self):
+    def test_get_survey_response_pmf_with_temperature(self):
         """Test convenience method with temperature scaling."""
         # Test with different temperatures
-        survey_pdf_normal = self.rater.get_survey_response_pdf_by_reference_set_id(
+        survey_pmf_normal = self.rater.get_survey_response_pmf_by_reference_set_id(
             "set1", self.test_responses, temperature=1.0
         )
-        survey_pdf_sharp = self.rater.get_survey_response_pdf_by_reference_set_id(
+        survey_pmf_sharp = self.rater.get_survey_response_pmf_by_reference_set_id(
             "set1", self.test_responses, temperature=0.5
         )
-        survey_pdf_smooth = self.rater.get_survey_response_pdf_by_reference_set_id(
+        survey_pmf_smooth = self.rater.get_survey_response_pmf_by_reference_set_id(
             "set1", self.test_responses, temperature=2.0
         )
 
-        # All should be valid PDFs
-        for pdf in [survey_pdf_normal, survey_pdf_sharp, survey_pdf_smooth]:
-            assert np.isclose(pdf.sum(), 1.0), "PDF should sum to 1"
-            assert np.all(pdf >= 0), "PDF should have non-negative values"
+        # All should be valid PMFs
+        for pmf in [survey_pmf_normal, survey_pmf_sharp, survey_pmf_smooth]:
+            assert np.isclose(pmf.sum(), 1.0), "PMF should sum to 1"
+            assert np.all(pmf >= 0), "PMF should have non-negative values"
 
         # Sharp should be more peaked
-        assert survey_pdf_sharp.max() >= survey_pdf_normal.max(), (
+        assert survey_pmf_sharp.max() >= survey_pmf_normal.max(), (
             "Sharp should be more peaked"
         )
+
+    def test_get_survey_response_pmf_by_reference_set_id_with_epsilon(self):
+        """Test that epsilon is properly handled in the convenience method."""
+        # Test with epsilon
+        result_no_eps = self.rater.get_survey_response_pmf_by_reference_set_id(
+            "set1", self.test_responses, temperature=1.0, epsilon=0.0
+        )
+        result_with_eps = self.rater.get_survey_response_pmf_by_reference_set_id(
+            "set1", self.test_responses, temperature=1.0, epsilon=0.02
+        )
+
+        # Both should be valid PMFs
+        for result in [result_no_eps, result_with_eps]:
+            assert result.shape == (5,), "Should return 1D array with 5 elements"
+            assert np.isclose(result.sum(), 1.0), "Should sum to 1"
+            assert np.all(result >= 0), "All values should be non-negative"
+
+        # Results should be different due to epsilon
+        assert not np.allclose(result_no_eps, result_with_eps), (
+            "Results should differ when epsilon is used"
+        )
+
+    def test_epsilon_with_temperature_survey_level(self):
+        """Test epsilon and temperature interaction at survey level."""
+        # Test different combinations at survey level
+        combinations = [
+            (1.0, 0.0),  # Baseline
+            (1.0, 0.01),  # Only epsilon
+            (0.5, 0.0),  # Only temperature (sharp)
+            (0.5, 0.01),  # Both (sharp with epsilon)
+            (2.0, 0.01),  # Both (smooth with epsilon)
+        ]
+
+        survey_results = []
+        for temperature, epsilon in combinations:
+            result = self.rater.get_survey_response_pmf_by_reference_set_id(
+                "set1", self.test_responses, temperature=temperature, epsilon=epsilon
+            )
+            survey_results.append(result)
+
+            # Each result should be a valid PMF
+            assert result.shape == (5,), "Should have correct shape"
+            assert np.isclose(result.sum(), 1.0), (
+                f"Should sum to 1 with T={temperature}, ε={epsilon}"
+            )
+            assert np.all(result >= 0), (
+                f"Should have non-negative values with T={temperature}, ε={epsilon}"
+            )
+
+            # With epsilon, all values should be positive
+            if epsilon > 0:
+                assert np.all(result > 0), (
+                    f"All values should be positive with epsilon={epsilon}"
+                )
+
+        # Different parameter combinations should yield different results
+        for i in range(len(survey_results)):
+            for j in range(i + 1, len(survey_results)):
+                assert not np.allclose(survey_results[i], survey_results[j]), (
+                    f"Survey results {i} and {j} should be different"
+                )
 
 
 class TestEmbeddingsRaterEdgeCases:
@@ -261,10 +409,10 @@ class TestEmbeddingsRaterEdgeCases:
 
         # Single response
         single_response = np.random.rand(1, 10)
-        pdfs = rater.get_response_pdfs("set1", single_response)
+        pmfs = rater.get_response_pmfs("set1", single_response)
 
-        assert pdfs.shape == (1, 5), "Should handle single response"
-        assert np.isclose(pdfs[0].sum(), 1.0), "PDF should sum to 1"
+        assert pmfs.shape == (1, 5), "Should handle single response"
+        assert np.isclose(pmfs[0].sum(), 1.0), "PMF should sum to 1"
 
     def test_large_number_of_responses(self):
         """Test with large number of responses."""
@@ -280,14 +428,14 @@ class TestEmbeddingsRaterEdgeCases:
 
         # Large number of responses
         large_responses = np.random.rand(100, 10)
-        pdfs = rater.get_response_pdfs("set1", large_responses)
+        pmfs = rater.get_response_pmfs("set1", large_responses)
 
-        assert pdfs.shape == (100, 5), "Should handle large number of responses"
+        assert pmfs.shape == (100, 5), "Should handle large number of responses"
 
-        # Check that all PDFs are valid
+        # Check that all PMFs are valid
         for i in range(100):
-            assert np.isclose(pdfs[i].sum(), 1.0), f"PDF {i} should sum to 1"
-            assert np.all(pdfs[i] >= 0), f"PDF {i} should have non-negative values"
+            assert np.isclose(pmfs[i].sum(), 1.0), f"PMF {i} should sum to 1"
+            assert np.all(pmfs[i] >= 0), f"PMF {i} should have non-negative values"
 
     def test_different_embedding_dimensions(self):
         """Test with different embedding dimensions."""
@@ -307,11 +455,11 @@ class TestEmbeddingsRaterEdgeCases:
 
         # Response with matching dimension
         responses = np.random.rand(3, embedding_dim)
-        pdfs = rater.get_response_pdfs("set1", responses)
+        pmfs = rater.get_response_pmfs("set1", responses)
 
-        assert pdfs.shape == (3, 5), "Should work with different embedding dimensions"
+        assert pmfs.shape == (3, 5), "Should work with different embedding dimensions"
         for i in range(3):
-            assert np.isclose(pdfs[i].sum(), 1.0), f"PDF {i} should sum to 1"
+            assert np.isclose(pmfs[i].sum(), 1.0), f"PMF {i} should sum to 1"
 
 
 if __name__ == "__main__":

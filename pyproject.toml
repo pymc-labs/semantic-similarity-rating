@@ -5,6 +5,7 @@ dependencies = [
     "polars>=0.20.0",
     "scipy>=1.10.0",
     "beartype>=0.15.0",
+    "sentence-transformers>=2.2.0",
 ]
 description = "A Python package implementing the Embeddings-Similarity Rating methodology for converting LLM textual responses to Likert scale probability distributions using semantic similarity against reference statements."
 name = "embeddings_similarity_rating"
@@ -39,6 +40,8 @@ platforms = ["osx-arm64", "linux-64", "osx-64"]
 embeddings_similarity_rating = { path = ".", editable = true }
 
 [tool.pixi.dependencies]
+ipykernel = "*"
+pip = "*"
 polars = "*"
 numpy = "*"
 ruff = "*"
@@ -47,6 +50,7 @@ pre-commit = "*"
 beartype = "*"
 tectonic = "*"
 scipy = "*"
+sentence-transformers = "*"
 
 [tool.pixi.environments]
 default = { features = ["test"], solve-group = "default" }

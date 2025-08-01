@@ -48,11 +48,11 @@ rater = EmbeddingsRater(reference_data, embeddings_column='embedding_small')
 
 # Convert LLM response embeddings to probability distributions
 llm_responses = np.random.rand(10, 384)
-pdfs = rater.get_response_pdfs('set1', llm_responses)
+pmfs = rater.get_response_pmfs('set1', llm_responses)
 
 # Get overall survey distribution
-survey_pdf = rater.get_survey_response_pdf(pdfs)
-print(f"Survey distribution: {survey_pdf}")
+survey_pmf = rater.get_survey_response_pmf(pmfs)
+print(f"Survey distribution: {survey_pmf}")
 ```
 
 ## Methodology
@@ -66,8 +66,8 @@ The ESR methodology works by:
 ## Core Components
 
 - `EmbeddingsRater`: Main class implementing the ESR methodology
-- `response_embeddings_to_pdf()`: Core function for similarity-to-probability conversion
-- `scale_pdf()`: Temperature scaling function
+- `response_embeddings_to_pmf()`: Core function for similarity-to-probability conversion
+- `scale_pmf()`: Temperature scaling function
 
 ## Citation
 
