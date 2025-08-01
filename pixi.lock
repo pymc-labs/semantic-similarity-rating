@@ -2631,6 +2631,14 @@ packages:
   - pkg:pypi/distlib?source=hash-mapping
   size: 274915
   timestamp: 1702383349284
+- pypi: .
+  name: embeddings-similarity-rating
+  version: 0.1.0
+  sha256: 8e5920fdbb49450b0df935e41fdbb9f50b439bf902210fcf0e2e51fd9f96ad2e
+  requires_dist:
+  - pytest ; extra == 'test'
+  requires_python: '>=3.11'
+  editable: true
 - conda: https://conda.anaconda.org/conda-forge/noarch/etuples-0.3.9-pyhd8ed1ab_0.conda
   sha256: 7e0742833d2348f4b0607575c98b9d05e3fa323d265bb57f787d410e6970111d
   md5: bc1fc711e8ec404bd6109ab4eb0e4a67
@@ -5851,14 +5859,6 @@ packages:
   purls: []
   size: 2882450
   timestamp: 1725410638874
-- pypi: .
-  name: package-name
-  version: 0.1.0
-  sha256: d7de72c9c745342c67c44c439084c25055cf760278fef36bc29abd46e5794488
-  requires_dist:
-  - pytest ; extra == 'test'
-  requires_python: '>=3.11'
-  editable: true
 - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-24.1-pyhd8ed1ab_0.conda
   sha256: 36aca948219e2c9fdd6d80728bcc657519e02f06c2703d8db3446aec67f51d81
   md5: cbe1bb1f21567018ce595d9c2be0f0db

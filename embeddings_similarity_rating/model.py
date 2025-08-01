@@ -4,7 +4,7 @@ This module contains the main model for the package.
 ✨ For usage examples, see /tests/test_model.py.
 """
 
-from package_name.types import DataClean
+from embeddings_similarity_rating.types import DataClean
 
 
 def my_model(data: DataClean) -> int:

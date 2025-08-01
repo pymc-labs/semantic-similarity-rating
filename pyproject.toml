@@ -2,7 +2,7 @@
 authors = [{name = "pymc-labs", email = "info@pymc-labs.com"}]
 dependencies = []
 description = "Add a short description here"
-name = "package_name"
+name = "embeddings_similarity_rating"
 requires-python = ">= 3.11"
 version = "0.1.0"
 
@@ -18,7 +18,7 @@ channels = ["conda-forge"]
 platforms = ["osx-arm64", "linux-64", "osx-64"]
 
 [tool.pixi.pypi-dependencies]
-package_name = { path = ".", editable = true }
+embeddings_similarity_rating = { path = ".", editable = true }
 
 [tool.pixi.dependencies]
 pandas = "*"

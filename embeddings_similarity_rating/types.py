@@ -13,7 +13,7 @@ Avoid:
         pass
 
 Prefer:
-    from package_name.types import DataRaw
+    from embeddings_similarity_rating.types import DataRaw
     def my_function(data: DataRaw):
         pass
 """

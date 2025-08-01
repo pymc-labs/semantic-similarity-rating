@@ -1,4 +1,4 @@
-"""Top-level module for package_name."""
+"""Top-level module for embeddings_similarity_rating."""
 
 from beartype.claw import beartype_this_package
 
