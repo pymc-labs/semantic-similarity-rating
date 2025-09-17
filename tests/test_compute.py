@@ -4,7 +4,7 @@ Tests for compute module - focused on mathematical properties and behavior.
 
 import numpy as np
 import pytest
-from embeddings_similarity_rating.compute import (
+from semantic_similarity_rating.compute import (
     scale_pmf,
     response_embeddings_to_pmf,
 )

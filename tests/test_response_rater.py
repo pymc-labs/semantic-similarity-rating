@@ -5,7 +5,7 @@ Tests for ResponseRater - focused on behavior, not implementation.
 import numpy as np
 import polars as po
 import pytest
-from embeddings_similarity_rating import ResponseRater
+from semantic_similarity_rating import ResponseRater
 
 # Test constants
 EMBEDDING_DIM = 128

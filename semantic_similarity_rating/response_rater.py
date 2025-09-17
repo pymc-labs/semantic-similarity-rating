@@ -76,7 +76,7 @@ class ResponseRater:
     **Text mode (automatic embedding computation):**
 
     >>> import polars as po
-    >>> from embeddings_similarity_rating import ResponseRater
+    >>> from semantic_similarity_rating import ResponseRater
     >>>
     >>> # Create reference sentences dataframe (no embedding column)
     >>> df = po.DataFrame({

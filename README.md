@@ -19,7 +19,7 @@ pip install -e .
 ### From GitHub Repository
 To install this package into your own project from GitHub, run:
 ```bash
-pip install git+https://github.com/pymc-labs/embeddings-similarity-rating.git
+pip install git+https://github.com/pymc-labs/semantic-similarity-rating.git
 ```
 
 ## Quick Start
@@ -27,7 +27,7 @@ pip install git+https://github.com/pymc-labs/embeddings-similarity-rating.git
 ```python
 import polars as po
 import numpy as np
-from embeddings_similarity_rating import ResponseRater
+from semantic_similarity_rating import ResponseRater
 
 # Create example reference sentences dataframe
 reference_set_1 = [

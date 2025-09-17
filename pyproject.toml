@@ -8,7 +8,7 @@ dependencies = [
     "sentence-transformers>=2.2.0",
 ]
 description = "A Python package implementing the Embeddings-Similarity Rating methodology for converting LLM textual responses to Likert scale probability distributions using semantic similarity against reference statements."
-name = "embeddings_similarity_rating"
+name = "semantic_similarity_rating"
 requires-python = ">= 3.10"
 version = "1.0.0"
 readme = "README.md"
@@ -37,7 +37,7 @@ channels = ["conda-forge"]
 platforms = ["osx-arm64", "linux-64", "osx-64"]
 
 [tool.pixi.pypi-dependencies]
-embeddings_similarity_rating = { path = ".", editable = true }
+semantic_similarity_rating = { path = ".", editable = true }
 
 [tool.pixi.dependencies]
 ipykernel = "*"
