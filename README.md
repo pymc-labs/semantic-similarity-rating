@@ -1,12 +1,12 @@
-# Embeddings-Similarity Rating (ESR)
+# Semantic-Similarity Rating (SSR)
 
-A Python package implementing the Embeddings-Similarity Rating methodology for converting LLM textual responses to Likert scale probability distributions using semantic similarity against reference statements.
+A Python package implementing the Semantic-Similarity Rating methodology for converting LLM textual responses to Likert scale probability distributions using semantic similarity against reference statements.
 
 ## Overview
 
-The ESR methodology addresses the challenge of mapping rich textual responses from Large Language Models (LLMs) to structured Likert scale ratings. Instead of forcing a single numerical rating, ESR preserves the inherent uncertainty and nuance in textual responses by generating probability distributions over all possible Likert scale points.
+The SSR methodology addresses the challenge of mapping rich textual responses from Large Language Models (LLMs) to structured Likert scale ratings. Instead of forcing a single numerical rating, SSR preserves the inherent uncertainty and nuance in textual responses by generating probability distributions over all possible Likert scale points.
 
-This package provides a distilled, reusable implementation of the ESR methodology described in the paper "Measuring Synthetic Consumer Purchase Intent Using Embeddings-Similarity Ratings" by Maier & Aslak (2025).
+This package provides a distilled, reusable implementation of the SSR methodology described in the paper "Measuring Synthetic Consumer Purchase Intent Using Semantic-Similarity Ratings" (2025).
 
 ## Installation
 
@@ -82,13 +82,13 @@ The ESR methodology works by:
 
 ## Core Components
 
-- `ResponseRater`: Main class implementing the ESR methodology
+- `ResponseRater`: Main class implementing the SSR methodology
 - `get_response_pmfs()`: Convert LLM response embeddings to PMFs using specified reference set
 
 ## Citation
 
 ```
-Maier, B. F., & Aslak, U. (2025). Measuring Synthetic Consumer Purchase Intent Using Embeddings-Similarity Ratings.
+Maier, B. F., Aslak, U., Fiaschi, L., Pappas, K., Wiecki, T. (2025). Measuring Synthetic Consumer Purchase Intent Using Embeddings-Similarity Ratings.
 ```
 
 ## License
