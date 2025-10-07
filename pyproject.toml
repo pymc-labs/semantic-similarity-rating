@@ -1,0 +1,61 @@
+[project]
+authors = [{ name = "pymc-labs", email = "info@pymc-labs.com" }]
+dependencies = [
+    "numpy>=1.24.0",
+    "polars>=0.20.0",
+    "scipy>=1.10.0",
+    "beartype>=0.15.0",
+    "sentence-transformers>=2.2.0",
+]
+description = "A Python package implementing the Embeddings-Similarity Rating methodology for converting LLM textual responses to Likert scale probability distributions using semantic similarity against reference statements."
+name = "semantic_similarity_rating"
+requires-python = ">= 3.10"
+version = "1.0.0"
+readme = "README.md"
+license = { text = "MIT" }
+keywords = ["embeddings", "llm", "likert", "similarity", "nlp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64", "osx-64"]
+
+[tool.pixi.pypi-dependencies]
+semantic_similarity_rating = { path = ".", editable = true }
+
+[tool.pixi.dependencies]
+ipykernel = "*"
+pip = "*"
+polars = "*"
+numpy = "*"
+ruff = "*"
+python-dotenv = "*"
+pre-commit = "*"
+beartype = "*"
+tectonic = "*"
+scipy = "*"
+sentence-transformers = "*"
+
+[tool.pixi.environments]
+default = { features = ["test"], solve-group = "default" }
+test = { features = ["test"], solve-group = "default" }
+minimal = { features = [], solve-group = "default" }
+
+[tool.pixi.feature.test.tasks]
+test = "pytest"
