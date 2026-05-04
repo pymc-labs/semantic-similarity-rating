@@ -1,5 +1,5 @@
 [project]
-authors = [{ name = "pymc-labs", email = "info@pymc-labs.com" }]
+authors = [{ name = "Anonymous", email = "anonymous@example.com" }]
 dependencies = [
     "numpy>=1.24.0",
     "polars>=0.20.0",

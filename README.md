@@ -6,20 +6,13 @@ A Python package implementing the Semantic-Similarity Rating methodology for con
 
 The SSR methodology addresses the challenge of mapping rich textual responses from Large Language Models (LLMs) to structured Likert scale ratings. Instead of forcing a single numerical rating, SSR preserves the inherent uncertainty and nuance in textual responses by generating probability distributions over all possible Likert scale points.
 
-This package provides a distilled, reusable implementation of the SSR methodology described in the paper "Measuring Synthetic Consumer Purchase Intent Using Semantic-Similarity Ratings" (2025).
+This package provides a distilled, reusable implementation of the SSR methodology described in the corresponding paper (under review).
 
 ## Installation
 
-### Local Development
-To install this package locally for development, run:
+After cloning this repository, install the package with:
 ```bash
 pip install -e .
-```
-
-### From GitHub Repository
-To install this package into your own project from GitHub, run:
-```bash
-pip install git+https://github.com/pymc-labs/semantic-similarity-rating.git
 ```
 
 ## Quick Start
@@ -88,7 +81,7 @@ The ESR methodology works by:
 ## Citation
 
 ```
-Maier, B. F., Aslak, U., Fiaschi, L., Pappas, K., Wiecki, T. (2025). Measuring Synthetic Consumer Purchase Intent Using Embeddings-Similarity Ratings.
+Anonymous (2026). Under review.
 ```
 
 ## License
