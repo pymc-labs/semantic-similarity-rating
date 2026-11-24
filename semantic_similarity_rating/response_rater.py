@@ -314,6 +314,100 @@ class ResponseRater:
             pmfs = compute.scale_pmfs(pmfs, temperature)
         return pmfs
 
+    def get_anchor_kernel(self, reference_set_id, temperature=1.0, epsilon=0.0):
+        """
+        Score each reference sentence of a set as if it were a response.
+
+        Row ``j`` is the PMF that SSR returns for a response equal to reference
+        sentence ``j``. The kernel depends only on the reference sentences, their
+        embeddings and the SSR settings, never on survey responses.
+
+        Parameters
+        ----------
+        reference_set_id : str
+            ID of the reference set.
+        temperature : float, default 1.0
+            Temperature for ``scale_pmfs``, as in :meth:`get_response_pmfs`.
+        epsilon : float, default 0.0
+            Regularization, as in :meth:`get_response_pmfs`.
+
+        Returns
+        -------
+        numpy.ndarray, shape (n_likert_points, n_likert_points)
+        """
+        M = self.reference_matrices[reference_set_id]
+        kernel = compute.response_embeddings_to_pmf(M.T, M, epsilon)
+        if temperature != 1.0:
+            kernel = compute.scale_pmfs(kernel, temperature)
+        return kernel
+
+    def get_choice_pmfs(
+        self, reference_set_id, choice_probabilities, temperature=1.0, epsilon=0.0
+    ):
+        """
+        Convert probabilities over reference sentences into SSR PMFs.
+
+        Use this when a model returns a probability for each reference sentence
+        directly, for example a decision model asked which sentence a respondent
+        would most likely say, instead of a free-text response. Each choice is
+        scored with the same SSR mapping a free-text response equal to that
+        sentence would get, so the output is on the same scale as
+        :meth:`get_response_pmfs`:
+
+        ``pmf = choice_probabilities @ get_anchor_kernel(reference_set_id)``
+
+        Parameters
+        ----------
+        reference_set_id : str
+            ID of the reference set, or ``'mean'`` to average over all sets.
+        choice_probabilities : numpy.ndarray or dict
+            For one set: array of shape ``(n_responses, n_likert_points)`` whose
+            columns follow the set's ``int_response`` order. For ``'mean'``: a dict
+            mapping every reference set ID to such an array.
+        temperature : float, default 1.0
+            Temperature applied to each kernel row, so each sentence is scored
+            exactly as :meth:`get_response_pmfs` would score it as a response.
+        epsilon : float, default 0.0
+            Regularization used for the kernel.
+
+        Returns
+        -------
+        numpy.ndarray, shape (n_responses, n_likert_points)
+
+        Raises
+        ------
+        ValueError
+            If a probability array has the wrong shape, negative values or rows
+            that do not sum to one, or if ``'mean'`` input does not cover every set.
+        """
+        if isinstance(reference_set_id, str) and reference_set_id.lower() == "mean":
+            if not isinstance(choice_probabilities, dict) or set(
+                choice_probabilities
+            ) != set(self.reference_matrices):
+                raise ValueError(
+                    "For 'mean', choice_probabilities must map every reference set ID "
+                    "to an array of choice probabilities."
+                )
+            return np.array(
+                [
+                    self.get_choice_pmfs(set_id, probs, temperature, epsilon)
+                    for set_id, probs in choice_probabilities.items()
+                ]
+            ).mean(axis=0)
+
+        kernel = self.get_anchor_kernel(reference_set_id, temperature, epsilon)
+        probs = np.asarray(choice_probabilities, dtype=float)
+        if probs.ndim != 2 or probs.shape[1] != kernel.shape[0]:
+            raise ValueError(
+                f"Expected choice probabilities of shape (n_responses, {kernel.shape[0]}), "
+                f"got {probs.shape}."
+            )
+        if np.any(probs < 0) or not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
+            raise ValueError(
+                "Each row of choice probabilities must be non-negative and sum to one."
+            )
+        return probs @ kernel
+
     def get_survey_response_pmf(self, response_pmfs):
         """
         Calculate the overall survey response PMF by averaging individual response PMFs.

@@ -72,6 +72,21 @@ survey_pmf = rater.get_survey_response_pmf(pmfs)
 print(survey_pmf)
 ```
 
+## Choice probabilities from decision models
+
+Some models return a probability for each option of a multiple-choice question instead of free text. With such a model, ask which reference sentence the respondent would most likely say in reply to the survey question, using each reference set as the options. `get_choice_pmfs` turns those probabilities into SSR PMFs:
+
+```python
+# One row per respondent; columns follow the set's int_response order.
+choice_probabilities = np.array([[0.05, 0.10, 0.15, 0.40, 0.30]])
+pmfs = rater.get_choice_pmfs("set1", choice_probabilities)
+
+# Average over all reference sets, with one array per set.
+pmfs = rater.get_choice_pmfs("mean", {"set1": probs_1, "set2": probs_2})
+```
+
+A chosen sentence is not read as its own scale point. It gets the PMF that SSR gives a free-text response equal to that sentence (`get_anchor_kernel`), and the choice probabilities weight those PMFs. The output is therefore on the same scale as `get_response_pmfs`, and nothing is fitted to survey data. The model still never states a number, and each reference set is scored separately and averaged, as in standard SSR.
+
 ## Methodology
 
 The ESR methodology works by:

@@ -254,3 +254,57 @@ class TestResponseRaterUtilities:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestChoicePmfs:
+    """Choice probabilities over reference sentences, scored through the SSR kernel."""
+
+    def _rater(self, num_sets=1):
+        return ResponseRater(
+            create_test_dataframe(include_embeddings=True, num_sets=num_sets)
+        )
+
+    def _sentence_embeddings(self, set_index=0):
+        df = create_test_dataframe(include_embeddings=True, num_sets=set_index + 1)
+        rows = df.filter(po.col("id") == f"set{set_index + 1}").sort("int_response")
+        return np.array(rows["embedding"].to_list())
+
+    def test_certain_choice_matches_ssr_score_of_that_sentence(self):
+        """Choosing sentence j with certainty gives the PMF SSR gives sentence j as a response."""
+        rater = self._rater()
+        expected = rater.get_response_pmfs("set1", self._sentence_embeddings())
+        choice = rater.get_choice_pmfs("set1", np.eye(LIKERT_SCALE_SIZE))
+        assert np.allclose(choice, expected)
+        assert np.allclose(rater.get_anchor_kernel("set1"), expected)
+
+    def test_mixed_choice_is_the_weighted_average_of_kernel_rows(self):
+        """A split choice gives the probability-weighted mix of the sentences' SSR PMFs."""
+        rater = self._rater()
+        kernel = rater.get_anchor_kernel("set1")
+        probs = np.array([[0.5, 0.0, 0.0, 0.0, 0.5], [0.2] * 5])
+        pmfs = rater.get_choice_pmfs("set1", probs)
+        assert_valid_pmf(pmfs, expected_rows=2)
+        assert np.allclose(pmfs[0], (kernel[0] + kernel[4]) / 2)
+
+    def test_mean_averages_every_set(self):
+        """'mean' averages the per-set results and needs every set."""
+        rater = self._rater(num_sets=2)
+        probs = {"set1": np.eye(LIKERT_SCALE_SIZE), "set2": np.full((5, 5), 0.2)}
+        expected = (
+            rater.get_choice_pmfs("set1", probs["set1"])
+            + rater.get_choice_pmfs("set2", probs["set2"])
+        ) / 2
+        assert np.allclose(rater.get_choice_pmfs("mean", probs), expected)
+        with pytest.raises(ValueError):
+            rater.get_choice_pmfs("mean", {"set1": probs["set1"]})
+
+    def test_invalid_choice_probabilities_rejected(self):
+        """Rows that are not probability distributions, or have the wrong width, are rejected."""
+        rater = self._rater()
+        for bad in (
+            np.full((1, 5), 0.3),
+            np.array([[1.2, -0.2, 0, 0, 0]]),
+            np.full((1, 4), 0.25),
+        ):
+            with pytest.raises(ValueError):
+                rater.get_choice_pmfs("set1", bad)
