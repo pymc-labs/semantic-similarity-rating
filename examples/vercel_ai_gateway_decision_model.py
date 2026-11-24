@@ -3,7 +3,8 @@ Example DecisionModel that calls a decision model through the Vercel AI Gateway.
 
 This is one way to plug a decision model into ``ResponseRater.get_decision_model_pmfs``.
 Any model that returns choice probabilities works; replace this class with your own.
-It uses only the standard library. Set ``AI_GATEWAY_API_KEY`` before running it.
+It adds no dependencies beyond this package and the standard library. Set
+``AI_GATEWAY_API_KEY`` before running it.
 
 The request follows the gateway's decision model API as the AI SDK sends it
 (``@ai-sdk/gateway``, ``experimental_decide``). Check the AI Gateway documentation
@@ -50,6 +51,8 @@ class GatewayDecisionModel:
             }
             answer = self._decide(state, {"answer": question})["answers"]["answer"]
             rows.append([answer["probabilities"][key] for key in keys])
+        if not rows:
+            return np.empty((0, len(options)), dtype=float)
         probs = np.array(rows, dtype=float)
         # The gateway rounds probabilities, so renormalize each row.
         return probs / probs.sum(axis=1, keepdims=True)

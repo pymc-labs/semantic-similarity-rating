@@ -252,10 +252,6 @@ class TestResponseRaterUtilities:
         assert info["embedding_dimension"] == EMBEDDING_DIM
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
-
-
 class TestChoicePmfs:
     """Choice probabilities over reference sentences, scored through the SSR kernel."""
 
@@ -269,13 +265,37 @@ class TestChoicePmfs:
         rows = df.filter(po.col("id") == f"set{set_index + 1}").sort("int_response")
         return np.array(rows["embedding"].to_list())
 
-    def test_certain_choice_matches_ssr_score_of_that_sentence(self):
+    @pytest.mark.parametrize(("temperature", "epsilon"), [(1.0, 0.0), (0.5, 0.01)])
+    def test_certain_choice_matches_ssr_score_of_that_sentence(
+        self, temperature, epsilon
+    ):
         """Choosing sentence j with certainty gives the PMF SSR gives sentence j as a response."""
         rater = self._rater()
-        expected = rater.get_response_pmfs("set1", self._sentence_embeddings())
-        choice = rater.get_choice_pmfs("set1", np.eye(LIKERT_SCALE_SIZE))
+        expected = rater.get_response_pmfs(
+            "set1", self._sentence_embeddings(), temperature, epsilon
+        )
+        choice = rater.get_choice_pmfs(
+            "set1", np.eye(LIKERT_SCALE_SIZE), temperature, epsilon
+        )
         assert np.allclose(choice, expected)
-        assert np.allclose(rater.get_anchor_kernel("set1"), expected)
+        assert np.allclose(
+            rater.get_anchor_kernel("set1", temperature, epsilon), expected
+        )
+
+    def test_mean_with_temperature_matches_get_response_pmfs(self):
+        """'mean' averages before temperature scaling, as get_response_pmfs does."""
+        rater = self._rater(num_sets=2)
+        responses = self._sentence_embeddings()
+        certain = {"set1": np.eye(LIKERT_SCALE_SIZE), "set2": np.eye(LIKERT_SCALE_SIZE)}
+        kernels = [rater.get_anchor_kernel(s) for s in ("set1", "set2")]
+        expected = rater.get_choice_pmfs("mean", certain, temperature=0.5)
+        manual = (kernels[0] + kernels[1]) / 2
+        manual = manual**2 / (manual**2).sum(axis=1, keepdims=True)
+        assert np.allclose(expected, manual)
+        single = rater.get_response_pmfs("set1", responses, temperature=0.5)
+        assert np.allclose(
+            rater.get_choice_pmfs("set1", np.eye(LIKERT_SCALE_SIZE), 0.5), single
+        )
 
     def test_mixed_choice_is_the_weighted_average_of_kernel_rows(self):
         """A split choice gives the probability-weighted mix of the sentences' SSR PMFs."""
@@ -287,7 +307,7 @@ class TestChoicePmfs:
         assert np.allclose(pmfs[0], (kernel[0] + kernel[4]) / 2)
 
     def test_mean_averages_every_set(self):
-        """'mean' averages the per-set results and needs every set."""
+        """'mean' averages the per-set results and needs exactly the rater's sets."""
         rater = self._rater(num_sets=2)
         probs = {"set1": np.eye(LIKERT_SCALE_SIZE), "set2": np.full((5, 5), 0.2)}
         expected = (
@@ -295,22 +315,36 @@ class TestChoicePmfs:
             + rater.get_choice_pmfs("set2", probs["set2"])
         ) / 2
         assert np.allclose(rater.get_choice_pmfs("mean", probs), expected)
-        with pytest.raises(ValueError):
-            rater.get_choice_pmfs("mean", {"set1": probs["set1"]})
+        for bad in (
+            {"set1": probs["set1"]},
+            {**probs, "set3": probs["set1"]},
+            {"set1": probs["set1"], "set2": probs["set2"][:2]},
+            [probs["set1"], probs["set2"]],
+        ):
+            with pytest.raises(ValueError):
+                rater.get_choice_pmfs("mean", bad)
 
     def test_invalid_choice_probabilities_rejected(self):
-        """Rows that are not probability distributions, or have the wrong width, are rejected."""
+        """Rows that are not probability distributions, or have the wrong shape, are rejected."""
         rater = self._rater()
         for bad in (
             np.full((1, 5), 0.3),
             np.array([[1.2, -0.2, 0, 0, 0]]),
             np.full((1, 4), 0.25),
+            np.full(5, 0.2),
+            np.array([[np.nan, 0.25, 0.25, 0.25, 0.25]]),
         ):
             with pytest.raises(ValueError):
                 rater.get_choice_pmfs("set1", bad)
 
     def test_decision_model_gets_each_set_and_its_choices_are_scored(self):
         """Any DecisionModel is asked once per set with that set's sentences, and its answer is scored."""
+        df = create_test_dataframe(include_embeddings=True, num_sets=2).with_columns(
+            po.concat_str([po.col("id"), po.lit(": "), po.col("sentence")]).alias(
+                "sentence"
+            )
+        )
+        rater = ResponseRater(df)
 
         class StubModel:
             def __init__(self):
@@ -322,7 +356,6 @@ class TestChoicePmfs:
                 probs[:, -1] = 1.0
                 return probs
 
-        rater = self._rater(num_sets=2)
         model = StubModel()
         contexts = [{"respondent": "a"}, {"respondent": "b"}]
         pmfs = rater.get_decision_model_pmfs("mean", contexts, model)
@@ -333,7 +366,25 @@ class TestChoicePmfs:
         assert all(passed == contexts for passed, _ in model.calls)
         last = np.zeros((2, LIKERT_SCALE_SIZE))
         last[:, -1] = 1.0
-        expected = rater.get_choice_pmfs("mean", {"set1": last, "set2": last})
-        assert np.allclose(pmfs, expected)
+        assert np.allclose(
+            pmfs, rater.get_choice_pmfs("mean", {"set1": last, "set2": last})
+        )
+        single = rater.get_decision_model_pmfs("set2", contexts, StubModel())
+        assert np.allclose(single, rater.get_choice_pmfs("set2", last))
+
+    def test_decision_model_boundary_is_checked(self):
+        """A non-model, or a model returning the wrong number of rows, is rejected."""
+        rater = self._rater()
+
+        class ShortModel:
+            def choice_probabilities(self, contexts, options):
+                return np.full((1, len(options)), 1 / len(options))
+
         with pytest.raises(TypeError):
-            rater.get_decision_model_pmfs("set1", contexts, object())
+            rater.get_decision_model_pmfs("set1", ["a", "b"], object())
+        with pytest.raises(ValueError):
+            rater.get_decision_model_pmfs("set1", ["a", "b"], ShortModel())
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

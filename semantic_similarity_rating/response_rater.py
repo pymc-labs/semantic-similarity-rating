@@ -12,7 +12,7 @@ The module is particularly useful for analyzing Likert scale responses from LLMs
 by comparing their text against reference sentence text using semantic embeddings.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
@@ -373,21 +373,26 @@ class ResponseRater:
         would most likely say, instead of a free-text response. Each choice is
         scored with the same SSR mapping a free-text response equal to that
         sentence would get, so the output is on the same scale as
-        :meth:`get_response_pmfs`:
+        :meth:`get_response_pmfs`. For one set, before temperature scaling:
 
         ``pmf = choice_probabilities @ get_anchor_kernel(reference_set_id)``
+
+        As in :meth:`get_response_pmfs`, ``'mean'`` averages the per-set PMFs
+        first, and temperature scaling is applied once at the end. A certain
+        choice of sentence j therefore gives exactly the PMF that
+        :meth:`get_response_pmfs` gives sentence j as a response.
 
         Parameters
         ----------
         reference_set_id : str
             ID of the reference set, or ``'mean'`` to average over all sets.
-        choice_probabilities : numpy.ndarray or dict
+        choice_probabilities : numpy.ndarray or Mapping
             For one set: array of shape ``(n_responses, n_likert_points)`` whose
-            columns follow the set's ``int_response`` order. For ``'mean'``: a dict
-            mapping every reference set ID to such an array.
+            columns follow the set's ``int_response`` order. For ``'mean'``: a
+            mapping from every reference set ID to such an array, all with the
+            same number of rows.
         temperature : float, default 1.0
-            Temperature applied to each kernel row, so each sentence is scored
-            exactly as :meth:`get_response_pmfs` would score it as a response.
+            Temperature for ``scale_pmfs``, applied after any averaging.
         epsilon : float, default 0.0
             Regularization used for the kernel.
 
@@ -398,34 +403,51 @@ class ResponseRater:
         Raises
         ------
         ValueError
-            If a probability array has the wrong shape, negative values or rows
-            that do not sum to one, or if ``'mean'`` input does not cover every set.
+            If a probability array has the wrong shape, negative or non-finite
+            values, or rows that do not sum to one, or if ``'mean'`` input does not
+            cover exactly the reference sets or has arrays with different row counts.
         """
         if isinstance(reference_set_id, str) and reference_set_id.lower() == "mean":
-            if not isinstance(choice_probabilities, dict) or set(
+            if not isinstance(choice_probabilities, Mapping) or set(
                 choice_probabilities
             ) != set(self.reference_matrices):
                 raise ValueError(
                     "For 'mean', choice_probabilities must map every reference set ID "
                     "to an array of choice probabilities."
                 )
-            return np.array(
-                [
-                    self.get_choice_pmfs(set_id, probs, temperature, epsilon)
-                    for set_id, probs in choice_probabilities.items()
-                ]
-            ).mean(axis=0)
+            per_set = [
+                self._unscaled_choice_pmfs(set_id, probs, epsilon)
+                for set_id, probs in choice_probabilities.items()
+            ]
+            if len({pmfs.shape[0] for pmfs in per_set}) != 1:
+                raise ValueError(
+                    "For 'mean', every set needs the same number of rows of choice probabilities."
+                )
+            pmfs = np.array(per_set).mean(axis=0)
+        else:
+            pmfs = self._unscaled_choice_pmfs(
+                reference_set_id, choice_probabilities, epsilon
+            )
 
-        kernel = self.get_anchor_kernel(reference_set_id, temperature, epsilon)
+        if temperature != 1.0:
+            pmfs = compute.scale_pmfs(pmfs, temperature)
+        return pmfs
+
+    def _unscaled_choice_pmfs(self, reference_set_id, choice_probabilities, epsilon):
+        kernel = self.get_anchor_kernel(reference_set_id, epsilon=epsilon)
         probs = np.asarray(choice_probabilities, dtype=float)
         if probs.ndim != 2 or probs.shape[1] != kernel.shape[0]:
             raise ValueError(
                 f"Expected choice probabilities of shape (n_responses, {kernel.shape[0]}), "
                 f"got {probs.shape}."
             )
-        if np.any(probs < 0) or not np.allclose(probs.sum(axis=1), 1.0, atol=1e-6):
+        if (
+            not np.all(np.isfinite(probs))
+            or np.any(probs < 0)
+            or not np.allclose(probs.sum(axis=1), 1.0, rtol=0.0, atol=1e-6)
+        ):
             raise ValueError(
-                "Each row of choice probabilities must be non-negative and sum to one."
+                "Each row of choice probabilities must be finite, non-negative and sum to one."
             )
         return probs @ kernel
 
@@ -435,9 +457,9 @@ class ResponseRater:
         """
         Ask a decision model to choose among the reference sentences, then score the choices.
 
-        The model is called once per reference set, with every context and that
-        set's sentences in ``int_response`` order as the options. Its choice
-        probabilities go through :meth:`get_choice_pmfs`.
+        The model is called once per reference set, with every context and a copy
+        of that set's sentences in ``int_response`` order as the options. Its
+        choice probabilities go through :meth:`get_choice_pmfs`.
 
         Parameters
         ----------
@@ -455,20 +477,37 @@ class ResponseRater:
         Returns
         -------
         numpy.ndarray, shape (len(contexts), n_likert_points)
+
+        Raises
+        ------
+        TypeError
+            If ``model`` has no callable ``choice_probabilities`` method.
+        ValueError
+            If the model returns a number of rows other than ``len(contexts)``, or
+            probabilities that :meth:`get_choice_pmfs` rejects.
         """
-        if not isinstance(model, DecisionModel):
+        if not isinstance(model, DecisionModel) or not callable(
+            model.choice_probabilities
+        ):
             raise TypeError(
                 "model must implement choice_probabilities(contexts, options)."
             )
         mean = isinstance(reference_set_id, str) and reference_set_id.lower() == "mean"
         set_ids = list(self.reference_matrices) if mean else [reference_set_id]
-        probabilities = {
-            set_id: np.asarray(
-                model.choice_probabilities(contexts, self.reference_sentences[set_id]),
+        probabilities = {}
+        for set_id in set_ids:
+            probs = np.asarray(
+                model.choice_probabilities(
+                    contexts, list(self.reference_sentences[set_id])
+                ),
                 dtype=float,
             )
-            for set_id in set_ids
-        }
+            if probs.ndim != 2 or probs.shape[0] != len(contexts):
+                raise ValueError(
+                    f"The model returned {probs.shape[0] if probs.ndim else 0} rows "
+                    f"for {len(contexts)} contexts."
+                )
+            probabilities[set_id] = probs
         if mean:
             return self.get_choice_pmfs("mean", probabilities, temperature, epsilon)
         return self.get_choice_pmfs(
