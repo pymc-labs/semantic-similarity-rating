@@ -504,8 +504,8 @@ class ResponseRater:
             )
             if probs.ndim != 2 or probs.shape[0] != len(contexts):
                 raise ValueError(
-                    f"The model returned {probs.shape[0] if probs.ndim else 0} rows "
-                    f"for {len(contexts)} contexts."
+                    f"The model returned an array of shape {probs.shape}; expected "
+                    f"one row per context ({len(contexts)} rows)."
                 )
             probabilities[set_id] = probs
         if mean:
