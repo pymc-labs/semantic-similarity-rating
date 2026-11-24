@@ -79,7 +79,7 @@ Some models return a probability for each option of a multiple-choice question r
 If you already have the probabilities, pass them in directly:
 
 ```python
-# One row per respondent; columns follow the set's int_response order.
+# Each row is one respondent, and the columns follow the set's int_response order.
 choice_probabilities = np.array([[0.05, 0.10, 0.15, 0.40, 0.30]])
 pmfs = rater.get_choice_pmfs("set1", choice_probabilities)
 

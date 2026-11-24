@@ -253,7 +253,7 @@ class TestResponseRaterUtilities:
 
 
 class TestChoicePmfs:
-    """Choice probabilities over reference sentences, scored through the SSR kernel."""
+    """These tests score choice probabilities over reference sentences through the SSR kernel."""
 
     def _rater(self, num_sets=1):
         return ResponseRater(
@@ -352,22 +352,26 @@ class TestChoicePmfs:
 
             def choice_probabilities(self, contexts, options):
                 self.calls.append((list(contexts), list(options)))
+                # Each set gets a different answer, so a swapped set shows up.
                 probs = np.zeros((len(contexts), len(options)))
-                probs[:, -1] = 1.0
+                probs[:, 0 if options[0].startswith("set1") else -1] = 1.0
                 return probs
 
         model = StubModel()
         contexts = [{"respondent": "a"}, {"respondent": "b"}]
-        pmfs = rater.get_decision_model_pmfs("mean", contexts, model)
+        # A generator must reach every set, not only the first.
+        pmfs = rater.get_decision_model_pmfs("mean", iter(contexts), model)
         assert [options for _, options in model.calls] == [
             rater.get_reference_sentences("set1"),
             rater.get_reference_sentences("set2"),
         ]
         assert all(passed == contexts for passed, _ in model.calls)
+        first = np.zeros((2, LIKERT_SCALE_SIZE))
+        first[:, 0] = 1.0
         last = np.zeros((2, LIKERT_SCALE_SIZE))
         last[:, -1] = 1.0
         assert np.allclose(
-            pmfs, rater.get_choice_pmfs("mean", {"set1": last, "set2": last})
+            pmfs, rater.get_choice_pmfs("mean", {"set1": first, "set2": last})
         )
         single = rater.get_decision_model_pmfs("set2", contexts, StubModel())
         assert np.allclose(single, rater.get_choice_pmfs("set2", last))

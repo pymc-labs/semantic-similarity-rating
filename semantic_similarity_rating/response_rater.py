@@ -62,7 +62,7 @@ def _assert_reference_sentence_dataframe_structure(df, embeddings_column=None):
 @runtime_checkable
 class DecisionModel(Protocol):
     """
-    Any model that can give choice probabilities over a list of options.
+    A DecisionModel returns choice probabilities over a list of options.
 
     Implement ``choice_probabilities`` with the model and prompt of your choice.
     Each context is whatever your model needs for one respondent, for example a
@@ -71,7 +71,7 @@ class DecisionModel(Protocol):
     """
 
     def choice_probabilities(
-        self, contexts: Sequence[Any], options: Sequence[str]
+        self, contexts: Sequence[Any], options: list[str]
     ) -> np.ndarray:
         """Return an array of shape ``(len(contexts), len(options))`` whose rows sum to one."""
         ...
@@ -416,8 +416,10 @@ class ResponseRater:
                     "to an array of choice probabilities."
                 )
             per_set = [
-                self._unscaled_choice_pmfs(set_id, probs, epsilon)
-                for set_id, probs in choice_probabilities.items()
+                self._unscaled_choice_pmfs(
+                    set_id, choice_probabilities[set_id], epsilon
+                )
+                for set_id in self.reference_matrices
             ]
             if len({pmfs.shape[0] for pmfs in per_set}) != 1:
                 raise ValueError(
@@ -425,6 +427,10 @@ class ResponseRater:
                 )
             pmfs = np.array(per_set).mean(axis=0)
         else:
+            if isinstance(choice_probabilities, Mapping):
+                raise ValueError(
+                    "Pass a mapping of arrays only with reference_set_id='mean'."
+                )
             pmfs = self._unscaled_choice_pmfs(
                 reference_set_id, choice_probabilities, epsilon
             )
@@ -492,6 +498,10 @@ class ResponseRater:
             raise TypeError(
                 "model must implement choice_probabilities(contexts, options)."
             )
+        if isinstance(contexts, (str, bytes)):
+            raise TypeError("contexts must be a sequence of contexts, not a string.")
+        # A generator would be used up by the first set's call.
+        contexts = list(contexts)
         mean = isinstance(reference_set_id, str) and reference_set_id.lower() == "mean"
         set_ids = list(self.reference_matrices) if mean else [reference_set_id]
         probabilities = {}

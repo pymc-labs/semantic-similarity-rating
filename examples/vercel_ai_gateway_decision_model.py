@@ -1,5 +1,5 @@
 """
-Example DecisionModel that calls a decision model through the Vercel AI Gateway.
+This example DecisionModel calls a decision model through the Vercel AI Gateway.
 
 This is one way to plug a decision model into ``ResponseRater.get_decision_model_pmfs``.
 Any model that returns choice probabilities works; replace this class with your own.
@@ -24,6 +24,16 @@ from semantic_similarity_rating import ResponseRater
 GATEWAY_URL = "https://ai-gateway.vercel.sh/v4/ai/decision-model"
 
 
+def _option_key(index):
+    """Return a letter key for an option: a to z, then aa, ab and so on."""
+    key = ""
+    index += 1
+    while index:
+        index, rest = divmod(index - 1, 26)
+        key = string.ascii_lowercase[rest] + key
+    return key
+
+
 class GatewayDecisionModel:
     """Ask a gateway decision model which option a respondent would most likely say."""
 
@@ -34,7 +44,7 @@ class GatewayDecisionModel:
         self.provider_options = provider_options
 
     def choice_probabilities(self, contexts, options):
-        keys = string.ascii_lowercase[: len(options)]
+        keys = [_option_key(i) for i in range(len(options))]
         rows = []
         for context in contexts:
             state = {name: str(value) for name, value in context.items()}
