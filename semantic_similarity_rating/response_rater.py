@@ -12,6 +12,9 @@ The module is particularly useful for analyzing Likert scale responses from LLMs
 by comparing their text against reference sentence text using semantic embeddings.
 """
 
+from collections.abc import Sequence
+from typing import Any, Protocol, runtime_checkable
+
 import numpy as np
 import polars as po
 from sentence_transformers import SentenceTransformer
@@ -54,6 +57,24 @@ def _assert_reference_sentence_dataframe_structure(df, embeddings_column=None):
     for i, int_resps in zip(agg["id"], agg["int_response"]):
         assert len(int_resps) == 5
         assert all([i + 1 == r for i, r in enumerate(sorted(int_resps))])
+
+
+@runtime_checkable
+class DecisionModel(Protocol):
+    """
+    Any model that can give choice probabilities over a list of options.
+
+    Implement ``choice_probabilities`` with the model and prompt of your choice.
+    Each context is whatever your model needs for one respondent, for example a
+    respondent profile, a product description and the survey question. Ask the
+    model which option this respondent would most likely say in reply.
+    """
+
+    def choice_probabilities(
+        self, contexts: Sequence[Any], options: Sequence[str]
+    ) -> np.ndarray:
+        """Return an array of shape ``(len(contexts), len(options))`` whose rows sum to one."""
+        ...
 
 
 class ResponseRater:
@@ -407,6 +428,52 @@ class ResponseRater:
                 "Each row of choice probabilities must be non-negative and sum to one."
             )
         return probs @ kernel
+
+    def get_decision_model_pmfs(
+        self, reference_set_id, contexts, model, temperature=1.0, epsilon=0.0
+    ):
+        """
+        Ask a decision model to choose among the reference sentences, then score the choices.
+
+        The model is called once per reference set, with every context and that
+        set's sentences in ``int_response`` order as the options. Its choice
+        probabilities go through :meth:`get_choice_pmfs`.
+
+        Parameters
+        ----------
+        reference_set_id : str
+            ID of the reference set, or ``'mean'`` to use and average all sets.
+        contexts : sequence
+            One item per respondent, passed to the model unchanged.
+        model : DecisionModel
+            The decision model to use.
+        temperature : float, default 1.0
+            Passed to :meth:`get_choice_pmfs`.
+        epsilon : float, default 0.0
+            Passed to :meth:`get_choice_pmfs`.
+
+        Returns
+        -------
+        numpy.ndarray, shape (len(contexts), n_likert_points)
+        """
+        if not isinstance(model, DecisionModel):
+            raise TypeError(
+                "model must implement choice_probabilities(contexts, options)."
+            )
+        mean = isinstance(reference_set_id, str) and reference_set_id.lower() == "mean"
+        set_ids = list(self.reference_matrices) if mean else [reference_set_id]
+        probabilities = {
+            set_id: np.asarray(
+                model.choice_probabilities(contexts, self.reference_sentences[set_id]),
+                dtype=float,
+            )
+            for set_id in set_ids
+        }
+        if mean:
+            return self.get_choice_pmfs("mean", probabilities, temperature, epsilon)
+        return self.get_choice_pmfs(
+            reference_set_id, probabilities[reference_set_id], temperature, epsilon
+        )
 
     def get_survey_response_pmf(self, response_pmfs):
         """

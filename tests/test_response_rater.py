@@ -308,3 +308,32 @@ class TestChoicePmfs:
         ):
             with pytest.raises(ValueError):
                 rater.get_choice_pmfs("set1", bad)
+
+    def test_decision_model_gets_each_set_and_its_choices_are_scored(self):
+        """Any DecisionModel is asked once per set with that set's sentences, and its answer is scored."""
+
+        class StubModel:
+            def __init__(self):
+                self.calls = []
+
+            def choice_probabilities(self, contexts, options):
+                self.calls.append((list(contexts), list(options)))
+                probs = np.zeros((len(contexts), len(options)))
+                probs[:, -1] = 1.0
+                return probs
+
+        rater = self._rater(num_sets=2)
+        model = StubModel()
+        contexts = [{"respondent": "a"}, {"respondent": "b"}]
+        pmfs = rater.get_decision_model_pmfs("mean", contexts, model)
+        assert [options for _, options in model.calls] == [
+            rater.get_reference_sentences("set1"),
+            rater.get_reference_sentences("set2"),
+        ]
+        assert all(passed == contexts for passed, _ in model.calls)
+        last = np.zeros((2, LIKERT_SCALE_SIZE))
+        last[:, -1] = 1.0
+        expected = rater.get_choice_pmfs("mean", {"set1": last, "set2": last})
+        assert np.allclose(pmfs, expected)
+        with pytest.raises(TypeError):
+            rater.get_decision_model_pmfs("set1", contexts, object())

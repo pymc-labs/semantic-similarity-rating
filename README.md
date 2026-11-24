@@ -74,7 +74,9 @@ print(survey_pmf)
 
 ## Choice probabilities from decision models
 
-Some models return a probability for each option of a multiple-choice question instead of free text. With such a model, ask which reference sentence the respondent would most likely say in reply to the survey question, using each reference set as the options. `get_choice_pmfs` turns those probabilities into SSR PMFs:
+Some models return a probability for each option of a multiple-choice question rather than free text. You can use any such model with SSR. Ask it which reference sentence the respondent would most likely say in reply to the survey question, and give it each reference set as the options. A chosen sentence isn't read as its own scale point. It gets the PMF that SSR gives a free-text response equal to that sentence (`get_anchor_kernel`), and the choice probabilities weight those PMFs, so the output is on the same scale as `get_response_pmfs` and nothing is fitted to survey data.
+
+If you already have the probabilities, pass them in directly:
 
 ```python
 # One row per respondent; columns follow the set's int_response order.
@@ -85,7 +87,17 @@ pmfs = rater.get_choice_pmfs("set1", choice_probabilities)
 pmfs = rater.get_choice_pmfs("mean", {"set1": probs_1, "set2": probs_2})
 ```
 
-A chosen sentence is not read as its own scale point. It gets the PMF that SSR gives a free-text response equal to that sentence (`get_anchor_kernel`), and the choice probabilities weight those PMFs. The output is therefore on the same scale as `get_response_pmfs`, and nothing is fitted to survey data. The model still never states a number, and each reference set is scored separately and averaged, as in standard SSR.
+To have the rater call the model for you, wrap your model in a class with a `choice_probabilities(contexts, options)` method (the `DecisionModel` protocol). Each context is whatever your model needs for one respondent. The rater calls the model once per reference set:
+
+```python
+class MyModel:
+    def choice_probabilities(self, contexts, options):
+        ...  # return an array of shape (len(contexts), len(options))
+
+pmfs = rater.get_decision_model_pmfs("mean", contexts, MyModel())
+```
+
+`examples/vercel_ai_gateway_decision_model.py` shows one such wrapper for a decision model served through the Vercel AI Gateway. It's an example, not a requirement.
 
 ## Methodology
 
